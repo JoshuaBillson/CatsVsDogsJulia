@@ -45,7 +45,7 @@ end
 function Base.getindex(X::LazyImageLoader, i::AbstractArray)
     xs = cat([X[j][1] for j in i]..., dims=(4))
     ys = hcat([X[j][2] for j in i]...)
-    return xs, ys
+    return xs |> gpu, ys |> gpu
 end
 
 "Run a preprocessing function over an image"
@@ -77,9 +77,33 @@ function list_samples(data_directory::String)
     return ["$d/$filename" for d in dirs for filename in readdir(d)]
 end
 
-"Define the model"
-function get_model()
-    # Chain(ResNet34(pretrain=false), Dense(1000, 2), softmax)
+
+function get_model_1()
+    return Chain(ResNet34(pretrain=false), Dense(1000, 2, sigmoid))
+end
+
+function get_model_2()
+    Chain(
+        Flux.Conv((3, 3), 3 => 32, relu, pad=SamePad()), 
+        Flux.MaxPool((2, 2), pad=SamePad()), 
+        Flux.Conv((3, 3), 32 => 64, relu, pad=SamePad()), 
+        Flux.MaxPool((2, 2), pad=SamePad()), 
+        Flux.Conv((3, 3), 64 => 128, relu, pad=SamePad()), 
+        Flux.MaxPool((2, 2), pad=SamePad()), 
+        Flux.Conv((3, 3), 128 => 256, relu, pad=SamePad()), 
+        Flux.MaxPool((2, 2), pad=SamePad()), 
+        Flux.flatten, 
+        Flux.Dense(65536, 1024, relu),
+        Flux.Dense(1024, 128, relu),
+        Flux.Dense(128, 2, sigmoid),
+    )
+end
+
+function get_model_3()
+    return Chain(ResNet34(pretrain=false), Dense(1000, 2), Flux.softmax)
+end
+
+function get_model_4()
     Chain(
         Flux.Conv((3, 3), 3 => 32, relu, pad=SamePad()), 
         Flux.MaxPool((2, 2), pad=SamePad()), 
@@ -93,14 +117,14 @@ function get_model()
         Flux.Dense(65536, 1024, relu),
         Flux.Dense(1024, 128, relu),
         Flux.Dense(128, 2),
-        Flux.softmax, 
+        Flux.softmax
     )
 end
 
 "Main program loop"
 function main_function()
     # Create Model
-    model = get_model() |> gpu
+    model = get_model_2() |> gpu
 
     # Load Data
     data = load_data("data")
@@ -110,9 +134,6 @@ function main_function()
     loss(x, y) = Flux.crossentropy(model(x), y, dims=1);
     parameters, opt = Flux.params(model), Flux.Optimise.ADAM(1e-5)
     for (i, (x, y)) in enumerate(data_train)
-
-        # Move Data To GPU
-        x, y = gpu(x), gpu(y)
 
         # Log Loss And Accuracy
         l = @pipe loss(x, y) |> round(_, digits=6, base=10)

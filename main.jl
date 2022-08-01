@@ -80,7 +80,7 @@ end
 
 
 function get_model_1()
-    return Chain(ResNet(34, pretrain=false), Dense(1000, 2, sigmoid))
+    return Chain(ResNet(34, pretrain=true), Dense(1000, 2, sigmoid))
 end
 
 function get_model_2()
@@ -101,7 +101,7 @@ function get_model_2()
 end
 
 function get_model_3()
-    return Chain(ResNet(34, pretrain=false), Dense(1000, 2), Flux.softmax)
+    return Chain(ResNet(34, pretrain=true), Dense(1000, 2), Flux.softmax)
 end
 
 function get_model_4()
@@ -125,7 +125,7 @@ end
 "Main program loop"
 function main_function()
     # Create Model
-    model = get_model_1() |> gpu
+    model = get_model_3() |> gpu
 
     # Load Data
     data = load_data("data")
@@ -133,8 +133,8 @@ function main_function()
     
     # Training Loop
     loss(x, y) = Flux.crossentropy(model(x), y, dims=1);
-    parameters = Flux.params(model[end])
-    opt = Flux.Optimise.ADAM(1e-5)
+    parameters = Flux.params(model[end-1:end])
+    opt = Flux.Optimise.ADAM()
     for (i, (x, y, labels)) in enumerate(data_train)
 
         # Log Loss And Accuracy
@@ -145,7 +145,8 @@ function main_function()
         # Debugging
         # println("Labels: ", y)
         # println("Filenames: ", labels)
-        # println("Prediction: ", model(x))
+        # println("Raw Prediction: ", model(x))
+        # println("Prediction: ", Flux.onecold(model(x), 0:1))
         # println("Feature Shape: ", size(x))
         # println("Prediction Shape: ", size(model(x)))
         # println("Label Shape: ", size(y))

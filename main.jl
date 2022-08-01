@@ -80,7 +80,7 @@ end
 
 
 function get_model_1()
-    return Chain(ResNet34(pretrain=false), Dense(1000, 2, sigmoid))
+    return Chain(ResNet(34, pretrain=false), Dense(1000, 2, sigmoid))
 end
 
 function get_model_2()
@@ -101,7 +101,7 @@ function get_model_2()
 end
 
 function get_model_3()
-    return Chain(ResNet34(pretrain=false), Dense(1000, 2), Flux.softmax)
+    return Chain(ResNet(34, pretrain=false), Dense(1000, 2), Flux.softmax)
 end
 
 function get_model_4()
@@ -125,11 +125,11 @@ end
 "Main program loop"
 function main_function()
     # Create Model
-    model = get_model_4() |> gpu
+    model = get_model_3() |> gpu
 
     # Load Data
     data = load_data("data")
-    data_train = @pipe data |> shuffleobs |> DataLoader(_, batchsize=4, shuffle=true)
+    data_train = @pipe data |> shuffleobs |> DataLoader(_, batchsize=32, shuffle=true)
     
     # Training Loop
     loss(x, y) = Flux.crossentropy(model(x), y, dims=1);

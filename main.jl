@@ -125,7 +125,7 @@ end
 "Main program loop"
 function main_function()
     # Create Model
-    model = get_model_3() |> gpu
+    model = get_model_1() |> gpu
 
     # Load Data
     data = load_data("data")
@@ -133,7 +133,8 @@ function main_function()
     
     # Training Loop
     loss(x, y) = Flux.crossentropy(model(x), y, dims=1);
-    parameters, opt = Flux.params(model[end]), Flux.Optimise.ADAM(1e-5)
+    parameters = Flux.params(model[end])
+    opt = Flux.Optimise.ADAM(1e-5)
     for (i, (x, y, labels)) in enumerate(data_train)
 
         # Log Loss And Accuracy

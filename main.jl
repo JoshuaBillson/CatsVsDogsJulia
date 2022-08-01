@@ -88,7 +88,7 @@ function main_function()
 
     # Load Data
     data = load_data("data")
-    data_train = @pipe data |> shuffleobs |> DataLoader(_, batchsize=8, shuffle=true)
+    data_train = @pipe data |> shuffleobs |> DataLoader(_, batchsize=32, shuffle=true)
     
     # Training Loop
     parameters = Flux.params(model)

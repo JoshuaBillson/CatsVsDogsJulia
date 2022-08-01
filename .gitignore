@@ -2,3 +2,4 @@ data
 .idea
 train
 .DS_Store
+f_*.png

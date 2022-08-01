@@ -79,7 +79,7 @@ end
 
 "Define the model"
 function get_model()
-    # Chain(ResNet34(pretrain=false), Dense(1000, 2), softmax) |> gpu
+    # Chain(ResNet34(pretrain=false), Dense(1000, 2), softmax)
     Chain(
         Flux.Conv((3, 3), 3 => 32, relu, pad=SamePad()), 
         Flux.MaxPool((2, 2), pad=SamePad()), 
@@ -108,7 +108,7 @@ function main_function()
     
     # Training Loop
     loss(x, y) = Flux.crossentropy(model(x), y, dims=1);
-    parameters, opt = Flux.params(model), Flux.Optimise.ADAM(1e-8)
+    parameters, opt = Flux.params(model), Flux.Optimise.ADAM(1e-5)
     for (i, (x, y)) in enumerate(data_train)
 
         # Move Data To GPU

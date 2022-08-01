@@ -38,16 +38,14 @@ function Base.getindex(X::LazyImageLoader, i::Int)
     sample = X.samples[i]
     x = @pipe sample.filename |> load |> run_preprocessing(_, X.preprocessing_function) |> reshape(_, (size(_)..., 1))
     y = @pipe sample.label .|> Float32
-    class = split(sample.filename, "/")[end-1]
-    return x, y, class
+    return x, y
 end
 
 "Implement Base.getindex for LazyImageLoader when i is a range"
 function Base.getindex(X::LazyImageLoader, i::AbstractArray)
     xs = cat([X[j][1] for j in i]..., dims=(4))
     ys = hcat([X[j][2] for j in i]...)
-    classes = [X[j][3] for j in i]
-    return xs, ys, classes
+    return xs, ys
 end
 
 "Run a preprocessing function over an image"
@@ -111,7 +109,7 @@ function main_function()
     # Training Loop
     loss(x, y) = Flux.crossentropy(model(x), y, dims=1);
     parameters, opt = Flux.params(model), Flux.Optimise.ADAM(1e-8)
-    for (i, (x, y, classes)) in enumerate(data_train)
+    for (i, (x, y)) in enumerate(data_train)
 
         # Move Data To GPU
         x, y = gpu(x), gpu(y)

@@ -38,14 +38,15 @@ function Base.getindex(X::LazyImageLoader, i::Int)
     sample = X.samples[i]
     x = @pipe sample.filename |> load |> run_preprocessing(_, X.preprocessing_function) |> reshape(_, (size(_)..., 1))
     y = @pipe sample.label .|> Float32
-    return x, y
+    return x, y, sample.filename
 end
 
 "Implement Base.getindex for LazyImageLoader when i is a range"
 function Base.getindex(X::LazyImageLoader, i::AbstractArray)
     xs = cat([X[j][1] for j in i]..., dims=(4))
     ys = hcat([X[j][2] for j in i]...)
-    return xs |> gpu, ys |> gpu
+    labels = [X[j][3] for j in i]
+    return xs |> gpu, ys |> gpu, labels
 end
 
 "Run a preprocessing function over an image"
@@ -124,21 +125,32 @@ end
 "Main program loop"
 function main_function()
     # Create Model
-    model = get_model_2() |> gpu
+    model = get_model_4() |> gpu
 
     # Load Data
     data = load_data("data")
-    data_train = @pipe data |> shuffleobs |> DataLoader(_, batchsize=32, shuffle=true)
+    data_train = @pipe data |> shuffleobs |> DataLoader(_, batchsize=4, shuffle=true)
     
     # Training Loop
     loss(x, y) = Flux.crossentropy(model(x), y, dims=1);
-    parameters, opt = Flux.params(model), Flux.Optimise.ADAM(1e-5)
-    for (i, (x, y)) in enumerate(data_train)
+    parameters, opt = Flux.params(model[end]), Flux.Optimise.ADAM(1e-5)
+    for (i, (x, y, labels)) in enumerate(data_train)
 
         # Log Loss And Accuracy
         l = @pipe loss(x, y) |> round(_, digits=6, base=10)
         accuracy = @pipe (Flux.onecold(model(x), 0:1) .== Flux.onecold(y, 0:1)) |> mean |> x -> x * 100 |> round |> Int
         println("Loss: $l, Accuracy: $accuracy%")
+        
+        # Debugging
+        # println("Labels: ", y)
+        # println("Filenames: ", labels)
+        # println("Prediction: ", model(x))
+        # println("Feature Shape: ", size(x))
+        # println("Prediction Shape: ", size(model(x)))
+        # println("Label Shape: ", size(y))
+        # println("Prediction Type: ", typeof(model(x)))
+        # println("Feature Type: ", typeof(x))
+        # println("Label Type: ", typeof(y))
 
         # Print Progress
         total_iterations = length(data_train)

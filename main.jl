@@ -37,20 +37,23 @@ end
 function Base.getindex(X::LazyImageLoader, i::Int)
     sample = X.samples[i]
     x = @pipe sample.filename |> load |> run_preprocessing(_, X.preprocessing_function) |> reshape(_, (size(_)..., 1))
-    y = @pipe sample.label
-    return x, y
+    y = @pipe sample.label .|> Float32
+    class = split(sample.filename, "/")[end-1]
+    return x, y, class
 end
 
 "Implement Base.getindex for LazyImageLoader when i is a range"
 function Base.getindex(X::LazyImageLoader, i::AbstractArray)
     xs = cat([X[j][1] for j in i]..., dims=(4))
     ys = hcat([X[j][2] for j in i]...)
-    return xs, ys
+    classes = [X[j][3] for j in i]
+    return xs, ys, classes
 end
 
 "Run a preprocessing function over an image"
 function run_preprocessing(img::Matrix{RGB{T}}, preprocessing) where {T <: Number}
-    @pipe img |> channelview |> rawview .|> Float32 |> permutedims(_, (3, 2, 1)) |> preprocessing
+    # @pipe img |> channelview |> rawview .|> Float32 |> permutedims(_, (3, 2, 1)) |> preprocessing
+    @pipe img .|> float32 |> channelview |> permutedims(_, (3, 2, 1)) |> preprocessing
 end
 
 "Plot 16 randomly selected sample images"
@@ -62,7 +65,7 @@ end
 
 "Preprocess images by resizing to 256x256 and dividing all pixel intensities by 255"
 function preprocess_image(img::Array{Float32, 3})
-    @pipe img |> imresize(_, (256, 256)) |> x -> x / Float32(255.0)
+    @pipe img |> imresize(_, (256, 256))
 end
 
 "Load the sample data into a LazyImageLoader"
@@ -78,27 +81,54 @@ end
 
 "Define the model"
 function get_model()
-    Chain(ResNet34(pretrain=false), Dense(1000, 2))
+    # Chain(ResNet34(pretrain=false), Dense(1000, 2), softmax) |> gpu
+    Chain(
+        Flux.Conv((3, 3), 3 => 32, relu, pad=SamePad()), 
+        Flux.MaxPool((2, 2), pad=SamePad()), 
+        Flux.Conv((3, 3), 32 => 64, relu, pad=SamePad()), 
+        Flux.MaxPool((2, 2), pad=SamePad()), 
+        Flux.Conv((3, 3), 64 => 128, relu, pad=SamePad()), 
+        Flux.MaxPool((2, 2), pad=SamePad()), 
+        Flux.Conv((3, 3), 128 => 256, relu, pad=SamePad()), 
+        Flux.MaxPool((2, 2), pad=SamePad()), 
+        Flux.flatten, 
+        Flux.Dense(65536, 1024, relu),
+        Flux.Dense(1024, 128, relu),
+        Flux.Dense(128, 2),
+        Flux.softmax, 
+    )
 end
 
 "Main program loop"
 function main_function()
     # Create Model
-    model = get_model()
+    model = get_model() |> gpu
 
     # Load Data
     data = load_data("data")
     data_train = @pipe data |> shuffleobs |> DataLoader(_, batchsize=32, shuffle=true)
     
     # Training Loop
-    parameters = Flux.params(model)
-    opt = Flux.Optimise.ADAM(1e-12)
-    loss(x, y) = Flux.logitcrossentropy(model(x), y, dims=1);
-    for (x, y) in data_train
+    loss(x, y) = Flux.crossentropy(model(x), y, dims=1);
+    parameters, opt = Flux.params(model), Flux.Optimise.ADAM(1e-8)
+    for (i, (x, y, classes)) in enumerate(data_train)
+
+        # Move Data To GPU
+        x, y = gpu(x), gpu(y)
+
+        # Log Loss And Accuracy
         l = @pipe loss(x, y) |> round(_, digits=6, base=10)
         accuracy = @pipe (Flux.onecold(model(x), 0:1) .== Flux.onecold(y, 0:1)) |> mean |> x -> x * 100 |> round |> Int
-        "Loss: $l, Accuracy: $accuracy%" |> println
+        println("Loss: $l, Accuracy: $accuracy%")
+
+        # Print Progress
+        total_iterations = length(data_train)
+        println("Progress: $i / $total_iterations")
+
+        # Compute Gradients
         grads = Flux.gradient(() -> loss(x, y), parameters)
+
+        # Update Parameters
         Flux.Optimise.update!(opt, parameters, grads)
     end
 end

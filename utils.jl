@@ -23,6 +23,21 @@ function (a::MetricAccumulator)(::EpochEnd)
     a.acc = Vector{Float64}()
 end
 
+struct MetricAggregator
+    accumulators::Vector{MetricAccumulator}
+end
+
+function (a::MetricAggregator)(prediction, ground_truth) 
+    lines = [accumulator(prediction, ground_truth) for accumulator in a.accumulators]
+    return join(lines, ", ")
+end
+
+function (a::MetricAggregator)(::EpochEnd) 
+    for accumulator in a.accumulators
+        accumulator(EpochEnd())
+    end
+end
+
 function one_hot(class, classes)
     v = zeros(Float32, length(classes))
     for (i, c) in enumerate(classes)
